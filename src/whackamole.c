@@ -11,57 +11,22 @@
 #include "queue.h"
 #include "semphr.h"
 
-/*Deginiciones generales*/
+/*Definiciones generales*/
 #define WAM_GAMEPLAY_TIMEOUT        20000   //gameplay time
-#define WAM_MOLE_SHOW_MAX_TIME      4000//4000
-#define WAM_MOLE_OUTSIDE_MAX_TIME   2000//2000
-#define WAM_MOLE_SHOW_MIN_TIME      1000//1000
-#define WAM_MOLE_OUTSIDE_MIN_TIME   500//500
+#define WAM_MOLE_SHOW_MAX_TIME      4500
+#define WAM_MOLE_OUTSIDE_MAX_TIME   2500
+#define WAM_MOLE_SHOW_MIN_TIME      1500
+#define WAM_MOLE_OUTSIDE_MIN_TIME   750
 
-/*Defines para colas*/
-#define COLATECLALEN 1
 #define NMOLES 4
 
-/*===[Handlers Tareas]=====================================*/
-TaskHandle_t handlewhackmole_sl;
-TaskHandle_t handlemole_sl[4];
+/*Definiciones para colas*/
+#define COLATECLALEN 1
 
-/*===[Colas]==============================================*/
-QueueHandle_t hndlColaPuntaje;
-QueueHandle_t hndlColaTecla;
-QueueHandle_t hndlColaTopo0;
-QueueHandle_t hndlColaTopo1;
-QueueHandle_t hndlColaTopo2;
-QueueHandle_t hndlColaTopo3;
-
-/*===[Mutexes]===========================================*/
-SemaphoreHandle_t hndlUARTmutex;
-
-/*===[Variables Globales Privadas]======================*/
-typedef struct
-{
-	gpioMap_t led;                //led asociado al topo
-	TickType_t tVisible;		  //Momento cuando el topo se hace visible
-	TickType_t tEscondida;
-	TickType_t tGolpe;			 //Momento del golpe
-	TickType_t tdiff;
-	int32_t puntaje;
-	uint32_t index;				//Numero de topo
-
-} mole_t;
-
+/*===[Variables Globales Privadas]========================*/
 mole_t arrayDeMoles[NMOLES];	//Array de topos. Parametro para tarea
 
-/*===[Prototipos de Tareas]===========================*/
-void mole_service_logic( void* pvParameters );
-void whackamole_service_logic( void* pvParameters );
-
-/*===[Prototipos de funciones]=======================*/
-void logicaTopo0(void*, TickType_t, TickType_t );
-void logicaTopo1(void*, TickType_t, TickType_t );
-void logicaTopo2(void*, TickType_t, TickType_t );
-void logicaTopo3(void*, TickType_t, TickType_t );
-
+/*=======================================================*/
 /**
    @brief init game
  */
@@ -75,10 +40,7 @@ void whackamole_init()
 	for(i = 0; i < NMOLES; i++){
 
 		arrayDeMoles[i].led = (LEDB + i); //Asigno un led a  cada mole. LEDB hasta LED3
-		arrayDeMoles[i].puntaje = 0;	//Las demas variables las inicializo en 0
-		arrayDeMoles[i].tEscondida = 0;
 		arrayDeMoles[i].tVisible = 0;
-		arrayDeMoles[i].tdiff = 0;
 		arrayDeMoles[i].tGolpe = 0;
 		arrayDeMoles[i].index = i;
 	}
@@ -116,7 +78,7 @@ void whackamole_init()
 	hndlColaTecla = xQueueCreate(COLATECLALEN, sizeof(t_key_data)); //La cola pasa la estructura de la tecla(martillazos)
 	configASSERT( hndlColaTecla != NULL );
 
-	hndlColaPuntaje = xQueueCreate(1, sizeof(int32_t)); //La cola pasa la estructura de la tecla(martillazos)
+	hndlColaPuntaje = xQueueCreate(1, sizeof(int32_t)); //La cola pasa el putaje
 	configASSERT( hndlColaPuntaje != NULL );
 
 	hndlColaTopo0 = xQueueCreate(1, sizeof(mole_t)); //La cola pasa la estructura de la mole
@@ -132,7 +94,7 @@ void whackamole_init()
 	configASSERT( hndlColaTopo3 != NULL )
 
 	/* Mutexes*/
-	hndlUARTmutex = xSemaphoreCreateMutex(); //Semaforo para proteger la UART
+	hndlUARTmutex = xSemaphoreCreateMutex(); //Mutex para proteger la UART
 	configASSERT( hndlUARTmutex != NULL );
 }
 
@@ -185,7 +147,7 @@ void whackamole_service_logic( void* pvParameters )
 
 	while( 1 )
 	{
-		printf("Presionar un boton por al menos 500ms. \n\r");
+		printf("Presionar un boton por al menos 500ms para iniciar. \n\r");
 
 		/* Inicio de juego*/
 		/* Recibe por la cola tiempo de pulsado de una tecla
@@ -304,19 +266,22 @@ void mole_service_logic( void* pvParameters )
 		/*Funciones con la logica de cada topo*/
 		/*Ejecuta la función correspondiente al topo en estado running*/
 		switch(mole->index){
-		case 0:
-			logicaTopo0(mole, tiempo_aparicion, tiempo_afuera);
-			break;
-		case 1:
-			logicaTopo1(mole, tiempo_aparicion, tiempo_afuera);
-			break;
 
-		case 2:
-			logicaTopo2(mole, tiempo_aparicion, tiempo_afuera);
-			break;
-		case 3:
-			logicaTopo3(mole, tiempo_aparicion, tiempo_afuera);
-			break;
+			case 0:
+				logicaTopo0(mole, tiempo_aparicion, tiempo_afuera);
+				break;
+
+			case 1:
+				logicaTopo1(mole, tiempo_aparicion, tiempo_afuera);
+				break;
+
+			case 2:
+				logicaTopo2(mole, tiempo_aparicion, tiempo_afuera);
+				break;
+
+			case 3:
+				logicaTopo3(mole, tiempo_aparicion, tiempo_afuera);
+				break;
 		}
 	}
 
