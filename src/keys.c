@@ -25,7 +25,7 @@ const t_key_config  keys_config[] = { TEC1, TEC2, TEC3, TEC4 };
 
 /*=====[Definition macros of private constants]==============================*/
 
-#define DEBOUNCE_TIME   25
+#define DEBOUNCE_TIME   80
 #define DEBOUNCE_TIME_MS pdMS_TO_TICKS(DEBOUNCE_TIME)
 
 /*=====[Prototypes (declarations) of private functions]======================*/
@@ -36,7 +36,7 @@ static void buttonReleased( uint32_t index );
 
 /*=====[Definitions of extern global variables]=============================*/
 
-extern QueueHandle_t hndlColaInicio;
+
 extern QueueHandle_t hndlColaTecla;
 
 extern SemaphoreHandle_t SemATecla;
@@ -181,7 +181,6 @@ static void buttonReleased( uint32_t index )
     keys_data[index].time_diff  = keys_data[index].time_up - keys_data[index].time_down;
     keys_data[index].index = index;
 
-    xQueueSend(hndlColaInicio, &keys_data[index].time_diff, 0); //Cola para para los 500ms de inicio
     xQueueSend(hndlColaTecla, &keys_data[index], 0); //Cola que pasa los datos de las teclas(martillazos)
 
 }
@@ -200,8 +199,11 @@ void task_tecla( void* taskParmPtr )
 
         for ( i = 0 ; i < KEY_COUNT ; i++ )
         {
+
             keys_Update( i );
+
         }
         vTaskDelay( DEBOUNCE_TIME_MS );
+
     }
 }
