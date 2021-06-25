@@ -29,7 +29,7 @@ int main( void )
     printf( "Booting Game\n" );
 
     /*Semilla para generar numeros random*/
-    random_set_seed( semilla );
+    random_set_seed( xTaskGetTickCount() );
 
     /* inicializo driver de teclas */
     keys_Init();
