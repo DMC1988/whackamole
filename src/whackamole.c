@@ -78,7 +78,7 @@ void whackamole_init()
 	hndlColaTecla = xQueueCreate(COLATECLALEN, sizeof(t_key_data)); //La cola pasa la estructura de la tecla(martillazos)
 	configASSERT( hndlColaTecla != NULL );
 
-	hndlColaPuntaje = xQueueCreate(1, sizeof(int32_t)); //La cola pasa el putaje
+	hndlColaPuntaje = xQueueCreate(1, sizeof(int32_t)); //La cola pasa el puntaje
 	configASSERT( hndlColaPuntaje != NULL );
 
 	hndlColaTopo0 = xQueueCreate(1, sizeof(mole_t)); //La cola pasa la estructura de la mole
