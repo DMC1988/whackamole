@@ -136,6 +136,9 @@ void whackamole_init()
 	hndlColaTecla = xQueueCreate(COLATECLALEN, sizeof(t_key_data)); //La cola pasa la estructura de la tecla(martillazos)
 	configASSERT( hndlColaTecla != NULL );
 
+	hndlColaPuntaje = xQueueCreate(1, sizeof(int32_t)); //La cola pasa la estructura de la tecla(martillazos)
+	configASSERT( hndlColaPuntaje != NULL );
+
 	hndlColaTopo0 = xQueueCreate(1, sizeof(mole_t)); //La cola pasa la estructura de la mole
 	configASSERT( hndlColaTopo0 != NULL )
 
@@ -216,12 +219,12 @@ void whackamole_service_logic( void* pvParameters )
 
 	while( 1 )
 	{
-		printf("Press Btn for at least 500ms\n\r");
+		printf("Presionar un boton por al menos 500ms \n\r");
 
 		/* Inicio de juego*/
 		/* Recibe por la cola tiempo de pulsado de una tecla
-		 * tInicioJuego > 500ms --> game-alive = True
-		 * tInicioJuego <= 500ms --> game-alive = False*/
+		 * tiempo > 500ms --> game-alive = True
+		 * tiempo <= 500ms --> game-alive = False*/
 		if(passInicio == FALSE){ //Agragado para que esta porción de codigo se ejecuta una sola vez.
 
 			xQueueReceive( hndlColaTecla, &martillazo, portMAX_DELAY );
@@ -232,7 +235,7 @@ void whackamole_service_logic( void* pvParameters )
 				game_alive = true;
 				tInicio = xTaskGetTickCount(); //Guardo la cuenta de tick en la cual se inicio el programa
 
-				/*Se reactiva la mole_service_logic. Tener en cuenta que se ejecuta indmediatamente*/
+				/*Se reactiva la mole_service_logic.*/
 				for(uint8_t i = 0; i < NMOLES; i++){
 
 					vTaskResume(handlemole_sl[i]);
@@ -247,19 +250,15 @@ void whackamole_service_logic( void* pvParameters )
 
 		while( true == game_alive )
 		{
-			//printf("Iniciado\n\r");
-
 			/*Acá inicia el programa*/
 
-			/* Recibe el martillazo.
-			 * El tiempo del golpe lo paso al topo.
-			 * El topo con todos los tiempos pasa a mole_service_logic*/
+			/* Recibirá los martillazos desde el driver de teclas.*/
 			if(xQueueReceive( hndlColaTecla, &martillazo, 0) == pdTRUE){
 
 				topo.index = martillazo.index;
 				topo.tGolpe = martillazo.time_down;
 
-
+				/*Enviará el martillazo al topo correspondiente*/
 				if(topo.index == 0){xQueueSend(hndlColaTopo0, &topo, 0);}
 				if(topo.index == 1){xQueueSend(hndlColaTopo1, &topo, 0);}
 				if(topo.index == 2){xQueueSend(hndlColaTopo2, &topo, 0);}
@@ -269,27 +268,21 @@ void whackamole_service_logic( void* pvParameters )
 
 
 
+			/* Deberá informar por UART cada actualización del puntaje. */
+			/* Recibe puntaje por cola cuando se martilla un topo, cuando se martilla un topo oculto o cuando no se martilla */
+			if(xQueueReceive(hndlColaPuntaje, &puntajexCola, 0) == pdTRUE){
+				puntos = puntos + puntajexCola; //Calcula el puntaje total
 
+				/*Protección de acceso a la UART ante acceso de tarea mole_service_logic*/
+				xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
 
-			/* Recibe el puntaje por parte del topo, y lo suma/resta a puntos
-//			 * Imprime el resultado por UART.
-//			 * Se actualiza cada vez que sale un topo.
-//			 * */
-//			if(xQueueReceive(hndlColaPuntaje, &puntajexCola, 0) == pdTRUE){
-//				puntos = puntos + puntajexCola; //Calcula el puntaje total
-//
-//				/*Protección de acceso a la UART*/
-//				xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
-//
-//				printf("Sumaste/restaste: %d puntos.\n\r", puntajexCola );
-//				printf("Tu puntaje total es: %d puntos.\n\r", puntajexCola );
-//
-//				xSemaphoreGive(hndlUARTmutex);
-//			}
-//
+				printf("Sumaste/restaste: %d puntos.\n\r", puntos );
+				printf("Tu puntaje total es: %d puntos.\n\r", puntos );
+
+				xSemaphoreGive(hndlUARTmutex);
+			}
+
 			tActual = xTaskGetTickCount(); //Guardo la cuenta de tick en actual
-
-
 
 
 //			/*tiempo de juego>tiempo limite -> Finaliza el juego*/
@@ -378,7 +371,9 @@ void logicaTopo0(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 		puntoxMartillazo = whackamole_points_no_mole();
 
-		/*todo: Enviar por cola puntoxMartillazo a tarea principal -20*/
+		/*Enviar por cola puntoxMartillazo a tarea principal -20*/
+		xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
+
 
 	}else{
 		/*Sale el topo*/
@@ -406,13 +401,14 @@ void logicaTopo0(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 			puntoxMartillazo = whackamole_points_success(tiempo_afuera, tReaccion);
 
-			/*todo: Enviar puntaje por cola*/
+			/*Enviar puntaje por cola*/
+			xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
 			/* Deberá informar por UART cada vez que reciba un martillazo, enviando el tiempo de
 			   reacción del usuario. */
-
-			printf("HIT %d || tR %d \n\r", mole->led, tReaccion);
-
+			xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
+			printf("HIT %d || tR %d \n\r", mole->index, tReaccion);
+			xSemaphoreGive(hndlUARTmutex);
 
 		}else{
 			/*El topo se esconde transcurrido el tiempo de aparación en el caso de que no hubo martillazo*/
@@ -424,8 +420,8 @@ void logicaTopo0(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 			if(xQueueReceive(hndlColaTopo0, &moleMartillada,pdMS_TO_TICKS(tiempo_afuera)) == pdFALSE ){
 
 				puntoxMartillazo = whackamole_points_miss();
-
-				/*todo: Enviar por cola el puntaje -10*/
+				/*Enviar por cola el puntaje -10*/
+				xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 			}
 		}
 	}
@@ -451,7 +447,8 @@ void logicaTopo1(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 	if(xQueueReceive(hndlColaTopo1, &moleMartillada,pdMS_TO_TICKS(tiempo_aparicion)) == pdTRUE ){
 
 		puntoxMartillazo = whackamole_points_no_mole();
-		/*todo: Enviar por cola puntoxMartillazo a tarea principal -20*/
+		/*Enviar por cola puntoxMartillazo a tarea principal -20*/
+		xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
 	}else{
 		/*Sale el topo*/
@@ -468,11 +465,12 @@ void logicaTopo1(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 			puntoxMartillazo = whackamole_points_success(tiempo_afuera, tReaccion);
 
-			/*todo: Enviar por cola puntoxMartillazo a tarea principal*/
+			/*Enviar por cola puntoxMartillazo a tarea principal*/
+			xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
-
-			printf("HIT %d || tR %d \n\r", mole->led, tReaccion);
-
+			xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
+			printf("HIT %d || tR %d \n\r", mole->index, tReaccion);
+			xSemaphoreGive(hndlUARTmutex);
 
 		}else{
 			/*El topo se esconde*/
@@ -482,8 +480,8 @@ void logicaTopo1(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 			if(xQueueReceive(hndlColaTopo1, &moleMartillada,pdMS_TO_TICKS(tiempo_afuera)) == pdFALSE ){
 
 				puntoxMartillazo = whackamole_points_miss();
-
-				/*todo: Enviar por cola puntoxMartillazo a tarea principal -10*/
+				/*Enviar por cola puntoxMartillazo a tarea principal -10*/
+				xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 			}
 		}
 	}
@@ -510,7 +508,8 @@ void logicaTopo2(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 		puntoxMartillazo = whackamole_points_no_mole();
 
-		/*todo: Enviar por cola puntoxMartillazo a tarea principal -20*/
+		/*Enviar por cola puntoxMartillazo a tarea principal -20*/
+		xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
 	}else{
 		/*Sale el topo*/
@@ -527,12 +526,12 @@ void logicaTopo2(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 			puntoxMartillazo = whackamole_points_success(tiempo_afuera, tReaccion);
 
-			/*todo: Enviar por cola puntoxMartillazo a tarea principal*/
+			/*Enviar por cola puntoxMartillazo a tarea principal*/
+			xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
-
+			xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
 			printf("HIT %d || tR %d \n\r", mole->index, tReaccion);
-
-
+			xSemaphoreGive(hndlUARTmutex);
 		}
 		else{
 			/*El topo se esconde*/
@@ -543,7 +542,8 @@ void logicaTopo2(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 				puntoxMartillazo = whackamole_points_miss();
 
-				/*todo: Enviar por cola puntoxMartillazo a tarea principal -10*/
+				/*Enviar por cola puntoxMartillazo a tarea principal -10*/
+				xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 			}
 		}
 	}
@@ -570,7 +570,8 @@ void logicaTopo3(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 		puntoxMartillazo = whackamole_points_no_mole();
 
-		/*todo: Enviar por cola puntoxMartillazo a tarea principal -20*/
+		/*Enviar por cola puntoxMartillazo a tarea principal -20*/
+		xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
 	}else{
 		/*Sale el topo*/
@@ -587,9 +588,11 @@ void logicaTopo3(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 
 			puntoxMartillazo = whackamole_points_success(tiempo_afuera, tReaccion);
 
+			xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
+			xSemaphoreTake(hndlUARTmutex, portMAX_DELAY);
 			printf("HIT %d || tR %d \n\r", mole->index, tReaccion);
-
+			xSemaphoreGive(hndlUARTmutex);
 		}
 		else{
 			/*El topo se esconde*/
@@ -599,7 +602,8 @@ void logicaTopo3(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 			if(xQueueReceive(hndlColaTopo3, &moleMartillada,pdMS_TO_TICKS(tiempo_afuera)) == pdFALSE ){
 
 				puntoxMartillazo = whackamole_points_miss();
-				/*todo: Enviar por cola puntoxMartillazo a tarea principal -10*/
+				/*Enviar por cola puntoxMartillazo a tarea principal -10*/
+				xQueueSend(hndlColaPuntaje, &puntoxMartillazo,0);
 
 			}
 		}
