@@ -29,7 +29,8 @@ int main( void )
     printf( "Booting Game\n" );
 
     /*Semilla para generar numeros random*/
-    random_set_seed( xTaskGetTickCount() );
+    /* Lee valor de tensión "ruido" de un pin*/
+    random_set_seed(adcRead(CH1));
 
     /* inicializo driver de teclas */
     keys_Init();

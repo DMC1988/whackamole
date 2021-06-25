@@ -306,7 +306,6 @@ void logicaTopo0(void* pvParameters, TickType_t tiempo_aparicion, TickType_t tie
 	/* Martillazo con topo oculto */
 	/* Si el martillazo llega cuando el topo está oculto, resta -20 puntos */
 	/* La cola espera un martillazo durante el tiempo oculto */
-
 	if(xQueueReceive(hndlColaTopo0, &moleMartillada,pdMS_TO_TICKS(tiempo_afuera)) == pdTRUE ){
 
 		puntoxMartillazo = whackamole_points_no_mole();
