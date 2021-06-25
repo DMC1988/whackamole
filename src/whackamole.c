@@ -219,7 +219,7 @@ void whackamole_service_logic( void* pvParameters )
 
 	while( 1 )
 	{
-		printf("Presionar un boton por al menos 500ms \n\r");
+		printf("Presionar un boton por al menos 500ms. \n\r");
 
 		/* Inicio de juego*/
 		/* Recibe por la cola tiempo de pulsado de una tecla
@@ -285,21 +285,42 @@ void whackamole_service_logic( void* pvParameters )
 			tActual = xTaskGetTickCount(); //Guardo la cuenta de tick en actual
 
 
-//			/*tiempo de juego>tiempo limite -> Finaliza el juego*/
-//			if( pdMS_TO_TICKS(tActual-tInicio) > WAM_GAMEPLAY_TIMEOUT){
-//
-//				printf("Fin del Juego \n\r");
-//				printf("Puntaje Final: %d", puntos);
-//
-//				vTaskDelay(pdMS_TO_TICKS(3000));
-//
-//				/*Ver que hago con todas las demas tareas*/
-//			}
+			/*tiempo de juego>tiempo limite -> Finaliza el juego*/
+			if( pdMS_TO_TICKS(tActual-tInicio) > WAM_GAMEPLAY_TIMEOUT){
+
+				printf("Fin del Juego. \n\r");
+				printf("Puntaje Final: %d \n\r", puntos);
+
+
+				for(uint8_t i = 0; i < NMOLES; i++){
+
+					/* Cuando finalice el juego, las otras tareas, deberán cesar su actividad. */
+					vTaskSuspend(handlemole_sl[i]);
+
+					/*Apago les LEDS*/
+					gpioWrite(LEDB+i, OFF);
+
+				}
+
+					/*Desactivo el pass de los 500ms al iniciar*/
+					passInicio = FALSE;
+
+					/*Desactivo el pass del juego*/
+					game_alive = FALSE;
+					/*Reinicio puntaje*/
+					puntos = 0;
+
+					/*Reinicio los tiempos*/
+					tInicio = 0;
+					tActual = 1;
+
+	
+				}
+			}
 
 		}
 
 	}
-}
 
 /**
    @brief servicio instanciado de cada mole
